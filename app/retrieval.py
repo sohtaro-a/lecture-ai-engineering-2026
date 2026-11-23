@@ -151,7 +151,9 @@ def search_graph(query: str) -> dict:
             adjacent[a].add(b)
             adjacent[b].add(a)
 
-    seeds = [hit for hit in search(query) if hit["page_id"] in pages][:min(GRAPH_START_K, GRAPH_MAX_RESULTS)]
+    hits = [hit for hit in search(query) if hit["page_id"] in pages]
+    vector_ranks = {hit["page_id"]: rank for rank, hit in enumerate(hits)}
+    seeds = hits[:min(GRAPH_START_K, GRAPH_MAX_RESULTS)]
     seed_ids = {seed["page_id"] for seed in seeds}
     results, candidates = [], {}
     for rank, seed in enumerate(seeds):
@@ -175,7 +177,9 @@ def search_graph(query: str) -> dict:
                 if neighbor not in pages or neighbor in seed_ids:
                     continue
                 frequency = max((len(adjacent[n]) for n in route if nodes[n]["kind"] == "term"), default=0)
-                priority = (len(route) - 1, frequency, rank, neighbor)
+                # 同じhop数なら、ベクトル検索で上位のページを優先する。
+                vector_rank = vector_ranks.get(neighbor, len(hits))
+                priority = (len(route) - 1, vector_rank, frequency, rank, neighbor)
                 candidate = {**pages[neighbor], "hops": len(route) - 1,
                              "path": [{"id": n, "title": nodes[n]["title"]} for n in route]}
                 if neighbor not in candidates or priority < candidates[neighbor][0]:
